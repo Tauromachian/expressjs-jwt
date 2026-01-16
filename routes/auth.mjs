@@ -3,13 +3,14 @@ import jwt from "jsonwebtoken";
 import { Resend } from "resend";
 import bcrypt from "bcrypt";
 import { v4 } from "uuid";
-
-import { authDto } from "../dtos/auth.dto.mjs";
-import { castDaysToMilliseconds } from "../utils/date.mjs";
+import { eq } from "drizzle-orm";
 
 import db from "../db/index.mjs";
 import { usersTable } from "../db/schema/user.mjs";
-import { eq } from "drizzle-orm";
+
+import { authDto } from "../dtos/auth.dto.mjs";
+import { castDaysToMilliseconds } from "../utils/date.mjs";
+import { warnEnvironmentVariable } from "/utils/env-vars.mjs";
 
 export const authRouter = Router();
 
@@ -152,6 +153,8 @@ authRouter.post("/register", async (req, res, next) => {
 
 authRouter.get("/verify", async (req, res, next) => {
   const { urlId } = req.params;
+
+  const results = await db.select().from(usersTable).where(eq(usersTable));
 
   const result = await repositories.user.find({ urlId });
   if (!result.success) return next(result.error);
