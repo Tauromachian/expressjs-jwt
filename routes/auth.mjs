@@ -182,18 +182,22 @@ authRouter.post("/forgot-password", async (req, res, next) => {
     return next(error);
   }
 
-  const result = await repositories.user.find({ email });
-  if (!result.success) return next(result.error);
+  const results = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email));
 
-  const user = result.results[0];
+  const user = results[0];
   if (!user) return next({ statusCode: 401 });
 
-  const token = v4();
-  const insertResult = await repositories.passwordResetToken.insert(
-    user,
+  const token = crypto.randomUUID();
+
+  valkeyClient.set(
+    `password-reset-${user.id}`,
     token,
+    "EX",
+    castDaysToSeconds(1),
   );
-  if (!insertResult.success) return next(insertResult.error);
 
   try {
     return await resend.emails.send({
@@ -209,6 +213,8 @@ authRouter.post("/forgot-password", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+
+  res.status(200).end();
 });
 
 async function resetPassword(req, res, next) {
