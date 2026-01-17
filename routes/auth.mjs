@@ -247,7 +247,7 @@ authRouter.post("/reset-password", async (req, res, next) => {
   return res.json("Password reset successfully");
 });
 
-function refresh(req, res, next) {
+authRouter.post("refresh", (req, res, next) => {
   const refreshToken = req.cookies.refreshToken;
 
   if (!refreshToken) return res.sendStatus(401);
@@ -261,9 +261,12 @@ function refresh(req, res, next) {
     const session = JSON.parse(result);
 
     const userId = session.userId;
-    const resultUser = await repositories.user.find({ id: userId });
-    if (!resultUser.success) return next(resultUser.error);
-    const user = resultUser.results[0];
+    const userResults = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, userId));
+
+    const user = userResults[0];
     if (!user) return next({ statusCode: 500, message: "User not found" });
 
     const tokenPayload = {
@@ -276,4 +279,4 @@ function refresh(req, res, next) {
 
     return res.json({ accessToken });
   });
-}
+});
