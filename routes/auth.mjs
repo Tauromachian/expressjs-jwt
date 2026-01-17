@@ -10,7 +10,6 @@ import { usersTable } from "../db/schema/user.mjs";
 
 import { authDto } from "../dtos/auth.dto.mjs";
 import { castDaysToMilliseconds, castDaysToSeconds } from "../utils/date.mjs";
-import { warnEnvironmentVariable } from "/utils/env-vars.mjs";
 import { valkeyClient } from "../config/valkey.mjs";
 
 export const authRouter = Router();
@@ -156,28 +155,23 @@ authRouter.post("/register", async (req, res, next) => {
   });
 });
 
-authRouter.get("/verify", async (req, res, next) => {
-  const { urlId } = req.params;
+authRouter.get("/verify", async (req, res) => {
+  const { verificationToken } = req.params;
 
-  const results = await db.select().from(usersTable).where(eq(usersTable));
+  const results = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.verificationToken, verificationToken));
 
-  const result = await repositories.user.find({ urlId });
-  if (!result.success) return next(result.error);
-
-  let user = result.results[0];
-  if (!user) return next(new Error());
+  const user = results[0];
 
   if (user.emailverified) {
     return res.json({ message: "User is already verified" });
   }
 
-  user = { ...result.results[0], emailverified: 1 };
+  await db.update().set(usersTable.verified, true);
 
-  const updateResult = await repositories.user.update(user);
-  if (!updateResult.success) return next(updateResult.error);
-
-  warnEnvironmentVariable(FRONT_END_URL, "https://wildin.gg");
-  res.redirect(FRONT_END_URL ?? "https://wildin.gg");
+  res.status(200).end();
 });
 
 authRouter.post("/forgot-password", async (req, res, next) => {
