@@ -243,7 +243,8 @@ authRouter.post("/reset-password", async (req, res, next) => {
   return res.json("Password reset successfully");
 });
 
-authRouter.post("refresh", (req, res, next) => {
+authRouter.post("refresh", refresh);
+async function refresh(req, res, next) {
   const refreshToken = req.cookies.refreshToken;
 
   if (!refreshToken) return res.sendStatus(401);
@@ -275,4 +276,4 @@ authRouter.post("refresh", (req, res, next) => {
 
     return res.json({ accessToken });
   });
-});
+}
