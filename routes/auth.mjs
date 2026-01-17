@@ -2,14 +2,18 @@ import { Router } from "express";
 import jwt from "jsonwebtoken";
 import { Resend } from "resend";
 import bcrypt from "bcrypt";
-import { v4 } from "uuid";
 import { eq } from "drizzle-orm";
+import z from "zod";
 
 import db from "../db/index.mjs";
 import { usersTable } from "../db/schema/user.mjs";
 
 import { authDto } from "../dtos/auth.dto.mjs";
-import { castDaysToMilliseconds, castDaysToSeconds } from "../utils/date.mjs";
+import {
+  castDaysToMilliseconds,
+  castDaysToSeconds,
+  getDateInSeconds,
+} from "../utils/date.mjs";
 import { valkeyClient } from "../config/valkey.mjs";
 
 export const authRouter = Router();
@@ -23,6 +27,7 @@ const {
   JWT_REFRESH_EXPIRES_IN,
   RESEND_API_KEY,
   RESEND_FROM_ADDRESS,
+  FRONT_END_URL,
 } = process.env;
 
 const resend = new Resend(RESEND_API_KEY);
@@ -192,7 +197,7 @@ authRouter.post("/forgot-password", async (req, res, next) => {
 
   const token = crypto.randomUUID();
 
-  valkeyClient.set(token, "exist", "EX", castDaysToSeconds(1));
+  valkeyClient.set(token, user.id, "EX", castDaysToSeconds(1));
 
   try {
     return await resend.emails.send({
@@ -212,7 +217,7 @@ authRouter.post("/forgot-password", async (req, res, next) => {
   res.status(200).end();
 });
 
-async function resetPassword(req, res, next) {
+authRouter.post("/reset-password", async (req, res, next) => {
   const { token, password } = req.body;
 
   try {
@@ -222,37 +227,25 @@ async function resetPassword(req, res, next) {
     return next(error);
   }
 
-  const result = await repositories.passwordResetToken.find({ token });
-  if (!result.success) return next(result.error);
+  const userId = valkeyClient.get(token);
+  if (!userId) return next(userId.error);
 
-  const passwordResetToken = result.results[0];
-  if (!passwordResetToken) {
-    return next({ statusCode: 401 });
-  }
-
-  const now = getDateInSeconds();
-  if (passwordResetToken.expiresAt <= now) {
-    return next({ statusCode: 401 });
-  }
-
-  const userResult = await repositories.user.find({
-    id: passwordResetToken.userId,
-  });
-  if (!userResult.success) return next(userResult.error);
-
-  const user = userResult.results[0];
-  if (!user) return next({ statusCode: 401 });
+  const userResults = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, userId));
+  if (!userResults) throw new Error("User not found");
 
   const SALT_ROUNDS = 10;
   const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-  user.password = hashedPassword;
-
-  const updateResult = await repositories.user.update(user);
-  if (updateResult.success === false) return next(updateResult.error);
+  await db
+    .update(usersTable)
+    .set(hashedPassword)
+    .where(eq(usersTable.id, userId));
 
   return res.json("Password reset successfully");
-}
+});
 
 function refresh(req, res, next) {
   const refreshToken = req.cookies.refreshToken;
