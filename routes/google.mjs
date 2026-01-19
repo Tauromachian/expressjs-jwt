@@ -4,7 +4,7 @@ import { OAuth2Client } from "google-auth-library";
 
 import crypto from "crypto";
 
-let router = Router();
+export const googleRouter = Router();
 
 const { APP_URL, GOOGLE_ID, GOOGLE_SECRET, GOOGLE_STATE_SECRET } = process.env;
 
@@ -52,11 +52,11 @@ function validateState(state) {
   return true;
 }
 
-router.get("/", (_, res) => {
+googleRouter.get("/", (_, res) => {
   res.render("index", { title: "Express" });
 });
 
-router.get("/auth/google", (_, res) => {
+googleRouter.get("/login", (_, res) => {
   const params = new URLSearchParams({
     client_id: GOOGLE_ID,
     redirect_uri: REDIRECT_URI,
@@ -71,7 +71,7 @@ router.get("/auth/google", (_, res) => {
   return res.redirect(GOOGLE_URL);
 });
 
-router.get("/auth/google/callback", async (req, res, next) => {
+googleRouter.get("/callback", async (req, res, next) => {
   const { code, state } = req.query;
 
   if (!code || !state) return next(new Error("Missing Google credential"));
@@ -100,5 +100,3 @@ router.get("/auth/google/callback", async (req, res, next) => {
     return next(error);
   }
 });
-
-export default router;
